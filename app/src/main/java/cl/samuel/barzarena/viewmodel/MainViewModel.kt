@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import cl.samuel.barzarena.R
 import cl.samuel.barzarena.model.ActiveBattles
 import cl.samuel.barzarena.model.Battle
 import cl.samuel.barzarena.model.Bet
@@ -29,9 +30,9 @@ class MainViewModel @Inject constructor(private val repository: UserRepository) 
 
     // Tienda
     val storeItems = listOf(
-        StoreItem("Micrófono de Oro", 15000, "microphone"),
-        StoreItem("Cadena de Lujo", 5000, "chain"),
-        StoreItem("Pulsera de Lujo", 25000, "bracelet")
+        StoreItem("Micrófono de Oro", 15000, R.drawable.microfonodeoro),
+        StoreItem("Cadena de Lujo", 5000, R.drawable.cadenadelujo),
+        StoreItem("Pulsera de Lujo", 25000, R.drawable.pulseradelujo)
     )
 
     // Batallas

@@ -36,7 +36,7 @@ data class Battle(
 data class StoreItem(
     val name: String,
     val price: Int,
-    val imageUrl: String? = null
+    @DrawableRes val imageResId: Int
 )
 
 // Las batallas activas predeterminadas (simulación)

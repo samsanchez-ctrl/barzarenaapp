@@ -55,6 +55,7 @@ import cl.samuel.barzarena.R
 import cl.samuel.barzarena.model.Battle
 import cl.samuel.barzarena.model.Bet
 import cl.samuel.barzarena.model.BetResult
+import cl.samuel.barzarena.model.StoreItem
 import cl.samuel.barzarena.viewmodel.MainViewModel
 import java.util.Calendar
 import java.util.Locale
@@ -465,7 +466,7 @@ fun HomeScreen(
 
 // --- PANTALLA 4: TIENDA ---
 @Composable
-fun StoreScreen(balance: Int, items: List<cl.samuel.barzarena.model.StoreItem>, onPurchase: (Int) -> Unit, onBack: () -> Unit) {
+fun StoreScreen(balance: Int, items: List<StoreItem>, onPurchase: (Int) -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
 
     Column(
@@ -505,13 +506,14 @@ fun StoreScreen(balance: Int, items: List<cl.samuel.barzarena.model.StoreItem>, 
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Placeholder de Imagen
-                Box(modifier = Modifier
-                    .size(40.dp)
-                    .background(Color.LightGray, RoundedCornerShape(4.dp))
-                ) {
-                    Text(text = item.imageUrl?.first().toString().uppercase(Locale.ROOT) ?: "?", modifier = Modifier.align(Alignment.Center), fontSize = 20.sp, color = Color.Black)
-                }
+                Image(
+                    painter = painterResource(id = item.imageResId),
+                    contentDescription = item.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                )
                 Spacer(modifier = Modifier.width(16.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
@@ -790,30 +792,41 @@ fun HistoryScreen(
                             .border(1.dp, color, RoundedCornerShape(8.dp)),
                         colors = CardDefaults.cardColors(containerColor = Color.White)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            // Línea 1: Resultado
-                            Text(
-                                text = when(bet.result) {
-                                    BetResult.WIN -> "¡GANADOR!"
-                                    BetResult.LOSS -> "PERDEDOR"
-                                    else -> "PENDIENTE"
-                                },
-                                color = color,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 18.sp
+                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Image(
+                                painter = painterResource(id = R.drawable.dinero),
+                                contentDescription = "Imagen de apuesta",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(70.dp)
+                                    .clip(CircleShape)
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                // Línea 1: Resultado
+                                Text(
+                                    text = when (bet.result) {
+                                        BetResult.WIN -> "¡GANADOR!"
+                                        BetResult.LOSS -> "PERDEDOR"
+                                        else -> "PENDIENTE"
+                                    },
+                                    color = color,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 18.sp
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
 
-                            // Línea 2: Batalla y Apuesta
-                            Text("Batalla: ${bet.battle}", color = Color.Black)
-                            Text("Apostaste: $ ${"%,d".format(bet.amount)} por ${bet.winnerSelected}", color = Color.DarkGray)
+                                // Línea 2: Batalla y Apuesta
+                                Text("Batalla: ${bet.battle}", color = Color.Black)
+                                Text("Apostaste: $ ${"%,d".format(bet.amount)} por ${bet.winnerSelected}", color = Color.DarkGray)
 
-                            // Línea 3: Ganancia/Pérdida
-                            val winText = if (bet.finalWinnings >= 0) "Ganancia: +$ ${"%,d".format(bet.finalWinnings)}" else "Pérdida: -$ ${"%,d".format(-bet.finalWinnings)}"
-                            Text(winText, color = color)
+                                // Línea 3: Ganancia/Pérdida
+                                val winText = if (bet.finalWinnings >= 0) "Ganancia: +$ ${"%,d".format(bet.finalWinnings)}" else "Pérdida: -$ ${"%,d".format(-bet.finalWinnings)}"
+                                Text(winText, color = color)
 
-                            // Línea 4: Fecha
-                            Text("Fecha: ${formatTimestamp(bet.timestamp)}", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                                // Línea 4: Fecha
+                                Text("Fecha: ${formatTimestamp(bet.timestamp)}", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                            }
                         }
                     }
                 }
