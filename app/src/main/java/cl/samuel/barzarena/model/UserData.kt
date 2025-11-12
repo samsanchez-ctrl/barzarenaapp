@@ -1,7 +1,7 @@
 package cl.samuel.barzarena.model
 
-// Contiene las clases de datos
-
+import androidx.annotation.DrawableRes
+import cl.samuel.barzarena.R
 import java.util.UUID
 
 /**
@@ -26,7 +26,8 @@ data class Battle(
     val id: Int,
     val rapFighterA: String,
     val rapFighterB: String,
-    val predictedWinner: String // El ganador predeterminado (secreto)
+    val predictedWinner: String, // El ganador predeterminado (secreto)
+    @DrawableRes val imageResId: Int
 )
 
 /**
@@ -40,7 +41,7 @@ data class StoreItem(
 
 // Las batallas activas predeterminadas (simulación)
 val ActiveBattles = listOf(
-    Battle(1, "Trueno", "Dani", "Trueno"),
-    Battle(2, "Wos", "Mks", "Wos"),
-    Battle(3, "Aczino", "Gazir", "Gazir")
+    Battle(1, "Trueno", "Dani", "Trueno", R.drawable.trueno),
+    Battle(2, "Wos", "Mks", "Wos", R.drawable.wos),
+    Battle(3, "Aczino", "Gazir", "Gazir", R.drawable.gazir)
 )

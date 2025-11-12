@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -37,7 +38,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -656,25 +659,36 @@ fun BattlesScreen(
                         .border(1.dp, if (isSelected) Color.Black else Color.LightGray, RoundedCornerShape(8.dp)),
                     colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFFEEEEEE) else Color.White)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("${battle.rapFighterA} vs ${battle.rapFighterB}", fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 20.sp)
-                        Text("Elige quien crees que gane", color = Color.DarkGray, fontSize = 14.sp)
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(id = battle.imageResId),
+                            contentDescription = "Imagen de la batalla",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text("${battle.rapFighterA} vs ${battle.rapFighterB}", fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 20.sp)
+                            Text("Elige quien crees que gane", color = Color.DarkGray, fontSize = 14.sp)
 
-                        if (isSelected) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            // Botones para elegir ganador
-                            Row(horizontalArrangement = Arrangement.SpaceAround, modifier = Modifier.fillMaxWidth()) {
-                                // Botón para Fighter A
-                                Button(
-                                    onClick = { selectedWinner = battle.rapFighterA },
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (selectedWinner == battle.rapFighterA) Color.Black else Color.DarkGray)
-                                ) { Text(battle.rapFighterA, color = Color.White) }
+                            if (isSelected) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                // Botones para elegir ganador
+                                Row(horizontalArrangement = Arrangement.SpaceAround, modifier = Modifier.fillMaxWidth()) {
+                                    // Botón para Fighter A
+                                    Button(
+                                        onClick = { selectedWinner = battle.rapFighterA },
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (selectedWinner == battle.rapFighterA) Color.Black else Color.DarkGray)
+                                    ) { Text(battle.rapFighterA, color = Color.White) }
 
-                                // Botón para Fighter B
-                                Button(
-                                    onClick = { selectedWinner = battle.rapFighterB },
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (selectedWinner == battle.rapFighterB) Color.Black else Color.DarkGray)
-                                ) { Text(battle.rapFighterB, color = Color.White) }
+                                    // Botón para Fighter B
+                                    Button(
+                                        onClick = { selectedWinner = battle.rapFighterB },
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (selectedWinner == battle.rapFighterB) Color.Black else Color.DarkGray)
+                                    ) { Text(battle.rapFighterB, color = Color.White) }
+                                }
                             }
                         }
                     }
