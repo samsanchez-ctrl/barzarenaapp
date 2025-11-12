@@ -42,7 +42,7 @@ class MainViewModel @Inject constructor(private val repository: UserRepository) 
     fun loginSuccess(user: String) {
         username = user
         balance = repository.getBalance() // Carga el saldo guardado
-        repository.saveSession(username, balance)
+        repository.saveSession(user) // Guarda solo la sesión del usuario
         loadHistory()
     }
 
@@ -57,8 +57,9 @@ class MainViewModel @Inject constructor(private val repository: UserRepository) 
      * Actualiza el saldo y lo guarda en el repositorio.
      */
     fun updateBalance(amount: Int) {
-        balance += amount
-        repository.saveSession(username, balance)
+        val newBalance = balance + amount
+        balance = newBalance
+        repository.saveBalance(newBalance) // Guarda el nuevo saldo
     }
 
     // --- RECARGA VARIABLE ---

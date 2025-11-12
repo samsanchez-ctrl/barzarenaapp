@@ -21,19 +21,16 @@ class UserRepository(context: Context) {
     fun getUsername(): String? = prefs.getString(USERNAME_KEY, null)
     fun getBalance(): Int = prefs.getInt(BALANCE_KEY, INITIAL_BALANCE)
 
-    fun saveSession(username: String, balance: Int) {
-        with(prefs.edit()) {
-            putString(USERNAME_KEY, username)
-            putInt(BALANCE_KEY, balance)
-            apply()
-        }
+    fun saveSession(username: String) {
+        prefs.edit().putString(USERNAME_KEY, username).apply()
+    }
+
+    fun saveBalance(balance: Int) {
+        prefs.edit().putInt(BALANCE_KEY, balance).apply()
     }
 
     fun clearSession() {
-        with(prefs.edit()) {
-            clear()
-            apply()
-        }
+        prefs.edit().remove(USERNAME_KEY).apply()
     }
 
     // --- Historial de Apuestas ---
