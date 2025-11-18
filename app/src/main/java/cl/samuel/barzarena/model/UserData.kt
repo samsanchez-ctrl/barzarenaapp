@@ -39,6 +39,14 @@ data class StoreItem(
     @DrawableRes val imageResId: Int
 )
 
+/**
+ * Representa un item en el carrito de compras.
+ */
+data class CartItem(
+    val item: StoreItem,
+    var quantity: Int = 1
+)
+
 // Las batallas activas predeterminadas (simulación)
 val ActiveBattles = listOf(
     Battle(1, "Trueno", "Dani", "Trueno", R.drawable.trueno),

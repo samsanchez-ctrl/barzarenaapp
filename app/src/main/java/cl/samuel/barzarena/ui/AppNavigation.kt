@@ -46,7 +46,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,6 +54,7 @@ import cl.samuel.barzarena.R
 import cl.samuel.barzarena.model.Battle
 import cl.samuel.barzarena.model.Bet
 import cl.samuel.barzarena.model.BetResult
+import cl.samuel.barzarena.model.CartItem
 import cl.samuel.barzarena.model.StoreItem
 import cl.samuel.barzarena.viewmodel.MainViewModel
 import java.util.Calendar
@@ -62,7 +62,7 @@ import java.util.Locale
 import java.util.regex.Pattern
 
 // --- CONSTANTES Y ESTADO GLOBAL ---
-enum class Screen { LOGIN, REGISTER, HOME, STORE, RECHARGE, BATTLES, HISTORY }
+enum class Screen { LOGIN, REGISTER, HOME, STORE, RECHARGE, BATTLES, HISTORY, CART }
 
 // --- FUNCIÓN PRINCIPAL DE NAVEGACIÓN ---
 
@@ -101,10 +101,11 @@ fun BarzarenaApp() {
         Screen.STORE -> StoreScreen(
             balance = vm.balance,
             items = vm.storeItems,
-            onPurchase = { price ->
-                vm.updateBalance(-price)
-                Toast.makeText(context, "¡Compra realizada!", Toast.LENGTH_SHORT).show()
+            onAddToCart = { item ->
+                vm.addToCart(item)
+                Toast.makeText(context, "${item.name} agregado al carrito", Toast.LENGTH_SHORT).show()
             },
+            onNavigateToCart = { currentScreen = Screen.CART },
             onBack = { currentScreen = Screen.HOME }
         )
         Screen.RECHARGE -> RechargeScreen(
@@ -133,6 +134,18 @@ fun BarzarenaApp() {
             history = vm.betHistory,
             formatTimestamp = { vm.formatBetTimestamp(it) },
             onBack = { currentScreen = Screen.HOME }
+        )
+        Screen.CART -> CartScreen(
+            cartItems = vm.cartItems,
+            onCheckout = {
+                if (vm.checkout()) {
+                    Toast.makeText(context, "¡Compra finalizada con éxito!", Toast.LENGTH_SHORT).show()
+                    currentScreen = Screen.HOME
+                } else {
+                    Toast.makeText(context, "Saldo insuficiente para completar la compra.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onBack = { currentScreen = Screen.STORE }
         )
     }
 }
@@ -466,9 +479,13 @@ fun HomeScreen(
 
 // --- PANTALLA 4: TIENDA ---
 @Composable
-fun StoreScreen(balance: Int, items: List<StoreItem>, onPurchase: (Int) -> Unit, onBack: () -> Unit) {
-    val context = LocalContext.current
-
+fun StoreScreen(
+    balance: Int,
+    items: List<StoreItem>,
+    onAddToCart: (StoreItem) -> Unit,
+    onNavigateToCart: () -> Unit,
+    onBack: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -496,47 +513,55 @@ fun StoreScreen(balance: Int, items: List<StoreItem>, onPurchase: (Int) -> Unit,
         Spacer(modifier = Modifier.height(20.dp))
 
         // Lista de ítems
-        items.forEach { item ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp)
-                    .background(Color(0xFFEEEEEE), shape = RoundedCornerShape(8.dp))
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Image(
-                    painter = painterResource(id = item.imageResId),
-                    contentDescription = item.name,
-                    contentScale = ContentScale.Crop,
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(items) { item ->
+                Row(
                     modifier = Modifier
-                        .size(60.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(item.name, color = Color.Black, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-                    Text("$ ${"%,d".format(item.price)}", color = Color.DarkGray)
-                }
-                Button(
-                    onClick = {
-                        if (balance >= item.price) {
-                            onPurchase(item.price)
-                        } else {
-                            Toast.makeText(context, "Saldo insuficiente para ${item.name}", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-                    enabled = balance >= item.price
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                        .background(Color(0xFFEEEEEE), shape = RoundedCornerShape(8.dp))
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Comprar", color = Color.White)
+                    Image(
+                        painter = painterResource(id = item.imageResId),
+                        contentDescription = item.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(60.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(item.name, color = Color.Black, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                        Text("$ ${"%,d".format(item.price)}", color = Color.DarkGray)
+                    }
+                    Button(
+                        onClick = { onAddToCart(item) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black)
+                    ) {
+                        Text("Agregar", color = Color.White)
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Botón para ir al carrito
+        Button(
+            onClick = onNavigateToCart,
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+        ) {
+            Text("Ir al Carrito", color = Color.White)
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         Button(
             onClick = onBack,
@@ -843,6 +868,85 @@ fun HistoryScreen(
         )
     }
 }
+
+// --- PANTALLA 8: CARRITO DE COMPRAS ---
+@Composable
+fun CartScreen(
+    cartItems: List<CartItem>,
+    onCheckout: () -> Unit,
+    onBack: () -> Unit
+) {
+    val totalCost = cartItems.sumOf { it.item.price * it.quantity }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(24.dp)
+    ) {
+        Text("CARRITO DE COMPRAS", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        Spacer(modifier = Modifier.height(20.dp))
+
+        if (cartItems.isEmpty()) {
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Tu carrito está vacío.", color = Color.DarkGray, fontSize = 18.sp)
+            }
+        } else {
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                items(cartItems) { cartItem ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("${cartItem.quantity}x", fontSize = 16.sp, color = Color.Black)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(cartItem.item.name, modifier = Modifier.weight(1f), fontSize = 16.sp, color = Color.Black)
+                        Text("$ ${"%,d".format(cartItem.item.price * cartItem.quantity)}", fontSize = 16.sp, color = Color.DarkGray)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Total
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Total:", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                Text("$ ${"%,d".format(totalCost)}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Botón de finalizar compra
+            Button(
+                onClick = onCheckout,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                Text("Finalizar Compra", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+        Text(
+            text = "Volver a la tienda",
+            color = Color.DarkGray,
+            modifier = Modifier
+                .clickable { onBack() }
+                .align(Alignment.CenterHorizontally)
+        )
+    }
+}
+
 
 // --- COMPONENTE REUTILIZABLE PARA BOTONES DE MENÚ ---
 @Composable

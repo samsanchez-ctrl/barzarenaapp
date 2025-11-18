@@ -1,6 +1,7 @@
 package cl.samuel.barzarena.viewmodel
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
@@ -9,6 +10,7 @@ import cl.samuel.barzarena.model.ActiveBattles
 import cl.samuel.barzarena.model.Battle
 import cl.samuel.barzarena.model.Bet
 import cl.samuel.barzarena.model.BetResult
+import cl.samuel.barzarena.model.CartItem
 import cl.samuel.barzarena.model.StoreItem
 import cl.samuel.barzarena.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,6 +36,10 @@ class MainViewModel @Inject constructor(private val repository: UserRepository) 
         StoreItem("Cadena de Lujo", 5000, R.drawable.cadenadelujo),
         StoreItem("Pulsera de Lujo", 25000, R.drawable.pulseradelujo)
     )
+
+    // Carrito
+    var cartItems = mutableStateListOf<CartItem>()
+        private set
 
     // Batallas
     val activeBattles: List<Battle> = ActiveBattles
@@ -103,5 +109,30 @@ class MainViewModel @Inject constructor(private val repository: UserRepository) 
     fun formatBetTimestamp(timestamp: Long): String {
         val sdf = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
         return sdf.format(Date(timestamp))
+    }
+
+    // --- CARRITO ---
+
+    fun addToCart(item: StoreItem) {
+        val existingItem = cartItems.find { it.item.name == item.name }
+        if (existingItem != null) {
+            existingItem.quantity++
+        } else {
+            cartItems.add(CartItem(item))
+        }
+    }
+
+    fun clearCart() {
+        cartItems.clear()
+    }
+
+    fun checkout(): Boolean {
+        val totalCost = cartItems.sumOf { it.item.price * it.quantity }
+        if (balance >= totalCost) {
+            updateBalance(-totalCost)
+            clearCart()
+            return true
+        }
+        return false
     }
 }
