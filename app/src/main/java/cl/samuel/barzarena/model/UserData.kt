@@ -4,6 +4,15 @@ import androidx.annotation.DrawableRes
 import cl.samuel.barzarena.R
 import java.util.UUID
 
+data class UserData(
+    val usuario: String?,
+    val correo: String?,
+    val rapero: String?,
+    val monto_apostado: Int?,
+    val prediccion: String?,
+    val resultado: String?
+)
+
 /**
  * Representa una apuesta realizada por el usuario.
  */

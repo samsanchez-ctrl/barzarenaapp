@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import cl.samuel.barzarena.R
 import cl.samuel.barzarena.model.ActiveBattles
 import cl.samuel.barzarena.model.Battle
@@ -12,8 +13,10 @@ import cl.samuel.barzarena.model.Bet
 import cl.samuel.barzarena.model.BetResult
 import cl.samuel.barzarena.model.CartItem
 import cl.samuel.barzarena.model.StoreItem
+import cl.samuel.barzarena.model.UserData
 import cl.samuel.barzarena.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -22,12 +25,14 @@ import javax.inject.Inject
 @HiltViewModel
 class MainViewModel @Inject constructor(private val repository: UserRepository) : ViewModel() {
 
-
     var username by mutableStateOf(repository.getUsername() ?: "")
         private set
     var balance by mutableStateOf(repository.getBalance())
         private set
     var betHistory by mutableStateOf(repository.getBetHistory())
+        private set
+
+    var remoteData by mutableStateOf<List<UserData>?>(null)
         private set
 
     // Tienda
@@ -43,6 +48,10 @@ class MainViewModel @Inject constructor(private val repository: UserRepository) 
 
     // Batallas
     val activeBattles: List<Battle> = ActiveBattles
+
+    init {
+        fetchRemoteData()
+    }
 
     // --- SESIÓN Y SALDO ---
 
@@ -109,6 +118,13 @@ class MainViewModel @Inject constructor(private val repository: UserRepository) 
     fun formatBetTimestamp(timestamp: Long): String {
         val sdf = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
         return sdf.format(Date(timestamp))
+    }
+
+    // --- REMOTE DATA ---
+    private fun fetchRemoteData() {
+        viewModelScope.launch {
+            remoteData = repository.getRemoteData()
+        }
     }
 
     // --- CARRITO ---

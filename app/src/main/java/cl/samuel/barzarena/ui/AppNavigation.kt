@@ -20,9 +20,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -56,6 +58,7 @@ import cl.samuel.barzarena.model.Bet
 import cl.samuel.barzarena.model.BetResult
 import cl.samuel.barzarena.model.CartItem
 import cl.samuel.barzarena.model.StoreItem
+import cl.samuel.barzarena.model.UserData
 import cl.samuel.barzarena.viewmodel.MainViewModel
 import java.util.Calendar
 import java.util.Locale
@@ -87,11 +90,13 @@ fun BarzarenaApp() {
             onNavigateRegister = { currentScreen = Screen.REGISTER }
         )
         Screen.REGISTER -> RegisterScreen(
-            onRegisterSuccess = { currentScreen = Screen.LOGIN }
+            onRegisterSuccess = { currentScreen = Screen.LOGIN },
+            onNavigateLogin = { currentScreen = Screen.LOGIN }
         )
         Screen.HOME -> HomeScreen(
             username = vm.username,
             balance = vm.balance,
+            remoteData = vm.remoteData,
             onNavigate = { currentScreen = it },
             onLogout = {
                 vm.logout()
@@ -182,7 +187,7 @@ fun isValidRUT(rutInput: String): Boolean {
     var sum = 0
     var multiplier = 2
     for (i in number.length - 1 downTo 0) {
-        sum += number[i].digitToInt() * multiplier
+        sum += number[i].toString().toInt() * multiplier
         multiplier++
         if (multiplier == 8) multiplier = 2
     }
@@ -216,7 +221,8 @@ fun LoginScreen(onLoginSuccess: (String) -> Unit, onNavigateRegister: () -> Unit
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
-            .padding(32.dp),
+            .padding(32.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -286,7 +292,7 @@ fun LoginScreen(onLoginSuccess: (String) -> Unit, onNavigateRegister: () -> Unit
 // --- PANTALLA 2: REGISTER ---
 
 @Composable
-fun RegisterScreen(onRegisterSuccess: () -> Unit) {
+fun RegisterScreen(onRegisterSuccess: () -> Unit, onNavigateLogin: () -> Unit) {
     val context = LocalContext.current
     var username by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
@@ -308,6 +314,7 @@ fun RegisterScreen(onRegisterSuccess: () -> Unit) {
             .fillMaxSize()
             .background(Color.White)
             .padding(32.dp)
+            .verticalScroll(rememberScrollState())
     ) {
         Text(
             text = "CREAR CUENTA",
@@ -376,7 +383,14 @@ fun RegisterScreen(onRegisterSuccess: () -> Unit) {
         ) {
             Text("REGISTRAR", color = Color.White, fontWeight = FontWeight.Bold)
         }
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "¿Ya tienes una cuenta? Inicia sesión aquí.",
+            color = Color.Black,
+            fontSize = 16.sp,
+            modifier = Modifier.clickable { onNavigateLogin() }
+        )
     }
 }
 
@@ -386,6 +400,7 @@ fun RegisterScreen(onRegisterSuccess: () -> Unit) {
 fun HomeScreen(
     username: String,
     balance: Int,
+    remoteData: List<UserData>?,
     onNavigate: (Screen) -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -394,6 +409,7 @@ fun HomeScreen(
             .fillMaxSize()
             .background(Color.White)
             .padding(24.dp)
+            .verticalScroll(rememberScrollState())
     ) {
         // --- Logo FMS ---
         Image(
@@ -461,6 +477,40 @@ fun HomeScreen(
         // Botón Historial
         MenuButton(text = "HISTORIAL DE APUESTAS") { onNavigate(Screen.HISTORY) }
 
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // --- API Obtener Datos ---
+        if (remoteData != null) {
+            Text(
+                text = "USUARIO RECIENTE Y RESULTADOS",
+                color = Color.Black,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 15.dp)
+            )
+            LazyColumn(modifier = Modifier.height(200.dp)) {
+                items(remoteData) { data ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFEEEEEE))
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            if (data.usuario != null) {
+                                Text("Usuario: ${data.usuario}", fontWeight = FontWeight.Bold)
+                                Text("Correo: ${data.correo}")
+                            } else {
+                                Text("Rapero: ${data.rapero}", fontWeight = FontWeight.Bold)
+                                Text("Monto Apostado: ${data.monto_apostado}")
+                                Text("Predicción: ${data.prediccion}")
+                                Text("Resultado: ${data.resultado}")
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(20.dp))
 
@@ -594,7 +644,8 @@ fun RechargeScreen(onRecharge: (Int) -> Unit, onBack: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
-            .padding(32.dp),
+            .padding(32.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -972,6 +1023,12 @@ fun LoginScreenPreview() {
 
 @Preview(showBackground = true)
 @Composable
+fun RegisterScreenPreview() {
+    RegisterScreen(onRegisterSuccess = {}, onNavigateLogin = {})
+}
+
+@Preview(showBackground = true)
+@Composable
 fun HomeScreenPreview() {
-    HomeScreen(username = "Samuel", balance = 100000, onNavigate = {}, onLogout = {})
+    HomeScreen(username = "Samuel", balance = 100000, remoteData = null, onNavigate = {}, onLogout = {})
 }
