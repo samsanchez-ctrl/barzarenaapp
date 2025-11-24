@@ -1,21 +1,26 @@
 package cl.samuel.barzarena.viewmodel
 
+import android.util.Log
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cl.samuel.barzarena.R
+import cl.samuel.barzarena.data.local.model.Bet
+import cl.samuel.barzarena.data.local.model.Item
+import cl.samuel.barzarena.data.repository.BetRepository
+import cl.samuel.barzarena.data.repository.ItemRepository
+import cl.samuel.barzarena.data.repository.UserRepository
 import cl.samuel.barzarena.model.ActiveBattles
 import cl.samuel.barzarena.model.Battle
-import cl.samuel.barzarena.model.Bet
 import cl.samuel.barzarena.model.BetResult
 import cl.samuel.barzarena.model.CartItem
 import cl.samuel.barzarena.model.StoreItem
 import cl.samuel.barzarena.model.UserData
-import cl.samuel.barzarena.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -23,111 +28,136 @@ import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
-class MainViewModel @Inject constructor(private val repository: UserRepository) : ViewModel() {
+class MainViewModel @Inject constructor(
+    private val userRepository: UserRepository,
+    private val betRepository: BetRepository,
+    private val itemRepository: ItemRepository
+) : ViewModel() {
 
-    var username by mutableStateOf(repository.getUsername() ?: "")
+    var username by mutableStateOf("")
         private set
-    var balance by mutableStateOf(repository.getBalance())
+    var balance by mutableIntStateOf(0)
         private set
-    var betHistory by mutableStateOf(repository.getBetHistory())
+    var userId by mutableIntStateOf(0)
+        private set
+
+    var isRecharging by mutableStateOf(false)
+        private set
+
+    var isPlacingBet by mutableStateOf(false)
+        private set
+
+    var betHistory = mutableStateListOf<Bet>()
         private set
 
     var remoteData by mutableStateOf<List<UserData>?>(null)
         private set
 
-    // Tienda
-    val storeItems = listOf(
-        StoreItem("Micrófono de Oro", 15000, R.drawable.microfonodeoro),
-        StoreItem("Cadena de Lujo", 5000, R.drawable.cadenadelujo),
-        StoreItem("Pulsera de Lujo", 25000, R.drawable.pulseradelujo)
-    )
+    var remoteDataError by mutableStateOf<String?>(null)
+        private set
 
-    // Carrito
+    val storeItems = mutableStateListOf<Item>()
+
     var cartItems = mutableStateListOf<CartItem>()
         private set
 
-    // Batallas
     val activeBattles: List<Battle> = ActiveBattles
 
-    init {
-        fetchRemoteData()
+    fun isUserLoggedIn(): Boolean {
+        return username.isNotEmpty()
     }
 
-    // --- SESIÓN Y SALDO ---
-
-    fun loginSuccess(user: String) {
-        username = user
-        balance = repository.getBalance() // Carga el saldo guardado
-        repository.saveSession(user) // Guarda solo la sesión del usuario
-        loadHistory()
+    fun loginSuccess(loggedInUsername: String, loggedInBalance: Int, loggedInUserId: Int) {
+        username = loggedInUsername
+        balance = loggedInBalance
+        userId = loggedInUserId
+        remoteDataError = null
+        loadInitialData()
     }
 
     fun logout() {
-        repository.clearSession()
         username = ""
-        balance = repository.getBalance() // Vuelve al saldo inicial
-        betHistory = emptyList()
+        balance = 0
+        userId = 0
+        betHistory.clear()
+        storeItems.clear()
+        remoteData = null
+        remoteDataError = null
     }
 
-    /**
-     * Actualiza el saldo y lo guarda en el repositorio.
-     */
-    fun updateBalance(amount: Int) {
-        val newBalance = balance + amount
-        balance = newBalance
-        repository.saveBalance(newBalance) // Guarda el nuevo saldo
-    }
-
-    // --- RECARGA VARIABLE ---
-
-    fun rechargeBalance(amount: Int): Boolean {
-        if (amount <= 0) return false
-        updateBalance(amount)
-        return true
-    }
-
-    // --- APUESTAS ---
-
-    fun placeBet(battle: Battle, winnerSelected: String, amount: Int): Bet {
-        val result = if (winnerSelected == battle.predictedWinner) BetResult.WIN else BetResult.LOSS
-        val finalWinnings = if (result == BetResult.WIN) amount * 2 else -amount
-
-        // 1. Descontar/Aumentar Saldo
-        updateBalance(finalWinnings)
-
-        // 2. Registrar Apuesta
-        val newBet = Bet(
-            battle = "${battle.rapFighterA} vs ${battle.rapFighterB}",
-            winnerSelected = winnerSelected,
-            amount = amount,
-            result = result,
-            finalWinnings = finalWinnings
-        )
-        repository.saveBet(newBet)
-        loadHistory()
-
-        return newBet
-    }
-
-    // --- HISTORIAL ---
-
-    private fun loadHistory() {
-        betHistory = repository.getBetHistory()
-    }
-
-    fun formatBetTimestamp(timestamp: Long): String {
-        val sdf = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
-        return sdf.format(Date(timestamp))
-    }
-
-    // --- REMOTE DATA ---
-    private fun fetchRemoteData() {
+    private fun loadInitialData() {
         viewModelScope.launch {
-            remoteData = repository.getRemoteData()
+            betRepository.getBetHistory(userId).collect { history ->
+                betHistory.clear()
+                betHistory.addAll(history)
+            }
+        }
+        viewModelScope.launch {
+            itemRepository.getStoreItems().collect { items ->
+                storeItems.clear()
+                storeItems.addAll(items)
+            }
+        }
+        viewModelScope.launch {
+            try {
+                remoteData = userRepository.getRemoteData()
+            } catch (e: Exception) {
+                val errorMessage = e.message ?: "Error de red desconocido"
+                Log.e("MainViewModel", "Error fetching remote data: $errorMessage")
+                remoteDataError = "Error de red: $errorMessage"
+                remoteData = emptyList() // Asignar lista vacía para detener la carga
+            }
         }
     }
 
-    // --- CARRITO ---
+    fun rechargeBalance(amount: Int, onResult: (Boolean) -> Unit) {
+        if (amount <= 0) {
+            onResult(false)
+            return
+        }
+        viewModelScope.launch {
+            isRecharging = true
+            delay(2500) // Simulación del procesamiento de pago
+            val newBalance = balance + amount
+            userRepository.updateUserBalance(userId, newBalance.toDouble())
+            balance = newBalance
+            isRecharging = false
+            onResult(true)
+        }
+    }
+
+    fun placeBet(battle: Battle, winnerSelected: String, amount: Int, onBetResult: (BetResult) -> Unit) {
+        viewModelScope.launch {
+            isPlacingBet = true
+            delay(2500) // Simulación del procesamiento de la apuesta
+
+            val result = if (winnerSelected == battle.predictedWinner) BetResult.WIN else BetResult.LOSS
+            val finalWinnings = if (result == BetResult.WIN) amount * 2.0 else -amount.toDouble()
+
+            val newBalance = balance + finalWinnings
+
+            userRepository.updateUserBalance(userId, newBalance)
+            balance = newBalance.toInt()
+
+            val newBet = Bet(
+                userId = userId,
+                amount = amount.toDouble(),
+                details = "${battle.rapFighterA} vs ${battle.rapFighterB}",
+                date = Date(),
+                result = result.name, // Guardar "WIN" o "LOSS"
+                winnings = finalWinnings
+            )
+            betRepository.placeBet(newBet)
+
+            isPlacingBet = false
+            onBetResult(result)
+        }
+    }
+
+    fun formatBetTimestamp(date: Date): String {
+        val sdf = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
+        return sdf.format(date)
+    }
 
     fun addToCart(item: StoreItem) {
         val existingItem = cartItems.find { it.item.name == item.name }
@@ -138,6 +168,10 @@ class MainViewModel @Inject constructor(private val repository: UserRepository) 
         }
     }
 
+    fun removeFromCart(cartItem: CartItem) {
+        cartItems.remove(cartItem)
+    }
+
     fun clearCart() {
         cartItems.clear()
     }
@@ -145,7 +179,12 @@ class MainViewModel @Inject constructor(private val repository: UserRepository) 
     fun checkout(): Boolean {
         val totalCost = cartItems.sumOf { it.item.price * it.quantity }
         if (balance >= totalCost) {
-            updateBalance(-totalCost)
+            val newBalance = balance - totalCost
+            viewModelScope.launch {
+                userRepository.updateUserBalance(userId, newBalance.toDouble())
+                balance = newBalance
+
+            }
             clearCart()
             return true
         }

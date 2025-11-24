@@ -1,6 +1,5 @@
 package cl.samuel.barzarena.ui
 
-import android.util.Patterns
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,11 +24,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -47,22 +51,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import cl.samuel.barzarena.R
 import cl.samuel.barzarena.model.Battle
-import cl.samuel.barzarena.model.Bet
 import cl.samuel.barzarena.model.BetResult
 import cl.samuel.barzarena.model.CartItem
 import cl.samuel.barzarena.model.StoreItem
 import cl.samuel.barzarena.model.UserData
+import cl.samuel.barzarena.ui.auth.LoginScreen
+import cl.samuel.barzarena.ui.auth.RegisterScreen
 import cl.samuel.barzarena.viewmodel.MainViewModel
-import java.util.Calendar
-import java.util.Locale
-import java.util.regex.Pattern
+import java.util.Date
+import kotlin.math.absoluteValue
 
 // --- CONSTANTES Y ESTADO GLOBAL ---
 enum class Screen { LOGIN, REGISTER, HOME, STORE, RECHARGE, BATTLES, HISTORY, CART }
@@ -77,14 +80,14 @@ fun BarzarenaApp() {
 
     // Estado de la Sesión y Navegación
     var currentScreen by rememberSaveable {
-        mutableStateOf(if (vm.username.isNotEmpty()) Screen.HOME else Screen.LOGIN)
+        mutableStateOf(if (vm.isUserLoggedIn()) Screen.HOME else Screen.LOGIN)
     }
 
     // Dibujar la pantalla actual
     when (currentScreen) {
         Screen.LOGIN -> LoginScreen(
-            onLoginSuccess = { username ->
-                vm.loginSuccess(username)
+            onLoginSuccess = { user ->
+                vm.loginSuccess(user.userName, user.balance.toInt(), user.id)
                 currentScreen = Screen.HOME
             },
             onNavigateRegister = { currentScreen = Screen.REGISTER }
@@ -97,6 +100,7 @@ fun BarzarenaApp() {
             username = vm.username,
             balance = vm.balance,
             remoteData = vm.remoteData,
+            remoteDataError = vm.remoteDataError,
             onNavigate = { currentScreen = it },
             onLogout = {
                 vm.logout()
@@ -105,7 +109,10 @@ fun BarzarenaApp() {
         )
         Screen.STORE -> StoreScreen(
             balance = vm.balance,
-            items = vm.storeItems,
+            items = vm.storeItems.map {
+                val imageResId = context.resources.getIdentifier(it.imageName, "drawable", context.packageName)
+                StoreItem(it.name, it.price.toInt(), if (imageResId != 0) imageResId else R.drawable.dinero) // Fallback
+            },
             onAddToCart = { item ->
                 vm.addToCart(item)
                 Toast.makeText(context, "${item.name} agregado al carrito", Toast.LENGTH_SHORT).show()
@@ -114,12 +121,15 @@ fun BarzarenaApp() {
             onBack = { currentScreen = Screen.HOME }
         )
         Screen.RECHARGE -> RechargeScreen(
+            isRecharging = vm.isRecharging,
             onRecharge = { amount ->
-                if (vm.rechargeBalance(amount)) {
-                    Toast.makeText(context, "Recarga de $$amount OK", Toast.LENGTH_SHORT).show()
-                    currentScreen = Screen.HOME
-                } else {
-                    Toast.makeText(context, "Ingrese un monto válido mayor a cero.", Toast.LENGTH_SHORT).show()
+                vm.rechargeBalance(amount) { success ->
+                    if (success) {
+                        Toast.makeText(context, "Recarga de $$amount OK", Toast.LENGTH_SHORT).show()
+                        currentScreen = Screen.HOME
+                    } else {
+                        Toast.makeText(context, "Ingrese un monto válido mayor a cero.", Toast.LENGTH_SHORT).show()
+                    }
                 }
             },
             onBack = { currentScreen = Screen.HOME }
@@ -127,11 +137,17 @@ fun BarzarenaApp() {
         Screen.BATTLES -> BattlesScreen(
             balance = vm.balance,
             activeBattles = vm.activeBattles,
+            isPlacingBet = vm.isPlacingBet,
             onPlaceBet = { battle, winner, amount ->
-                val betResult = vm.placeBet(battle, winner, amount)
-                val msg = if (betResult.result == BetResult.WIN) "¡GANASTE! +$${betResult.finalWinnings}" else "PERDISTE. -$${betResult.amount}"
-                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                currentScreen = Screen.HOME // Regresa a Home después de la apuesta
+                vm.placeBet(battle, winner, amount) { result ->
+                    val message = if (result == BetResult.WIN) {
+                        "¡Ganaste! Recibes el doble."
+                    } else {
+                        "¡Perdiste! Suerte para la próxima."
+                    }
+                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                    currentScreen = Screen.HOME // Regresa a Home después de la apuesta
+                }
             },
             onBack = { currentScreen = Screen.HOME }
         )
@@ -150,246 +166,8 @@ fun BarzarenaApp() {
                     Toast.makeText(context, "Saldo insuficiente para completar la compra.", Toast.LENGTH_SHORT).show()
                 }
             },
+            onRemoveFromCart = vm::removeFromCart,
             onBack = { currentScreen = Screen.STORE }
-        )
-    }
-}
-
-// UTILIDADES DE VALIDACIÓN
-
-/**
- * Verifica si la fecha de nacimiento (YYYY-MM-DD) corresponde a alguien mayor de 18 años.
- */
-fun isOlderThan18(dobString: String): Boolean {
-    if (dobString.length != 10) return false
-    val parts = dobString.split('-').mapNotNull { it.toIntOrNull() }
-    if (parts.size != 3) return false
-    val (year, month, day) = parts
-    val dob = Calendar.getInstance().apply { set(year, month - 1, day) }
-    val today = Calendar.getInstance()
-    val eighteenYearsAgo = today.clone() as Calendar
-    eighteenYearsAgo.add(Calendar.YEAR, -18)
-    return dob.before(eighteenYearsAgo) || dob.equals(eighteenYearsAgo)
-}
-
-/**
- * Valida un RUT chileno (ficticio, sin usar puntos) con guion y dígito verificador.
- */
-fun isValidRUT(rutInput: String): Boolean {
-    val rut = rutInput.replace(".", "").replace(" ", "").uppercase(Locale.getDefault())
-    if (!rut.contains("-")) return false
-    val parts = rut.split("-")
-    if (parts.size != 2) return false
-    val number = parts[0]
-    val dv = parts[1]
-    if (!Pattern.matches("\\d+", number)) return false
-
-    var sum = 0
-    var multiplier = 2
-    for (i in number.length - 1 downTo 0) {
-        sum += number[i].toString().toInt() * multiplier
-        multiplier++
-        if (multiplier == 8) multiplier = 2
-    }
-    val rest = 11 - (sum % 11)
-    val dvCalculated = when (rest) {
-        11 -> "0"
-        10 -> "K"
-        else -> rest.toString()
-    }
-    return dvCalculated == dv
-}
-
-
-// --- PANTALLA 1: LOGIN ---
-
-@Composable
-fun LoginScreen(onLoginSuccess: (String) -> Unit, onNavigateRegister: () -> Unit) {
-    val context = LocalContext.current
-    var username by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-
-    val textFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = Color.Black,
-        unfocusedBorderColor = Color.DarkGray,
-        cursorColor = Color.Black,
-        focusedLabelColor = Color.Black,
-        unfocusedLabelColor = Color.DarkGray,
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-            .padding(32.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "BARZARENA",
-            fontSize = 40.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.Black,
-            modifier = Modifier.padding(bottom = 60.dp)
-        )
-
-        OutlinedTextField(
-            value = username,
-            onValueChange = { username = it },
-            label = { Text("Nombre de usuario", color = Color.DarkGray) },
-            singleLine = true,
-            colors = textFieldColors,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Contraseña", color = Color.DarkGray) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            colors = textFieldColors,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(40.dp))
-
-        Button(
-            onClick = {
-                if (username.trim().isEmpty() || password.isEmpty()) {
-                    Toast.makeText(context, "Debe ingresar usuario y contraseña.", Toast.LENGTH_SHORT).show()
-                    return@Button
-                }
-
-                if (username.trim().lowercase(Locale.ROOT) == "samuel" && password == "password123") {
-                    onLoginSuccess(username.trim())
-                } else {
-                    Toast.makeText(context, "ERROR: Usuario o contraseña incorrectos.", Toast.LENGTH_LONG).show()
-                }
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-        ) {
-            Text("INICIAR SESIÓN", color = Color.White, fontWeight = FontWeight.Bold)
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "¿No tienes cuenta? Regístrate aquí.",
-            color = Color.Black,
-            fontSize = 16.sp,
-            modifier = Modifier.clickable { onNavigateRegister() }
-        )
-    }
-}
-
-// --- PANTALLA 2: REGISTER ---
-
-@Composable
-fun RegisterScreen(onRegisterSuccess: () -> Unit, onNavigateLogin: () -> Unit) {
-    val context = LocalContext.current
-    var username by rememberSaveable { mutableStateOf("") }
-    var email by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    var confirmPassword by rememberSaveable { mutableStateOf("") }
-    var rut by rememberSaveable { mutableStateOf("") }
-    var dob by rememberSaveable { mutableStateOf("") }
-
-    val textFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = Color.Black,
-        unfocusedBorderColor = Color.DarkGray,
-        cursorColor = Color.Black,
-        focusedLabelColor = Color.Black,
-        unfocusedLabelColor = Color.DarkGray,
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-            .padding(32.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Text(
-            text = "CREAR CUENTA",
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.Black,
-            modifier = Modifier.padding(top = 10.dp, bottom = 30.dp)
-        )
-
-        OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("Usuario") }, colors = textFieldColors, modifier = Modifier.fillMaxWidth())
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), colors = textFieldColors, modifier = Modifier.fillMaxWidth())
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Contraseña (mín. 6)") }, visualTransformation = PasswordVisualTransformation(), colors = textFieldColors, modifier = Modifier.fillMaxWidth())
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(value = confirmPassword, onValueChange = { confirmPassword = it }, label = { Text("Confirmar") }, visualTransformation = PasswordVisualTransformation(), colors = textFieldColors, modifier = Modifier.fillMaxWidth())
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(value = rut, onValueChange = { rut = it }, label = { Text("RUT (Ej: 12345678-K)") }, colors = textFieldColors, modifier = Modifier.fillMaxWidth())
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = dob,
-            onValueChange = { dob = it.take(10) },
-            label = { Text("Fecha Nacimiento (AAAA-MM-DD)") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            colors = textFieldColors,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(40.dp))
-
-        Button(
-            onClick = {
-                if (username.trim().isEmpty() || email.trim().isEmpty() || password.isEmpty() || confirmPassword.isEmpty() || rut.trim().isEmpty() || dob.trim().isEmpty()) {
-                    Toast.makeText(context, "ERROR: Todos los campos son obligatorios.", Toast.LENGTH_LONG).show()
-                    return@Button
-                }
-                if (!Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
-                    Toast.makeText(context, "ERROR: Email inválido.", Toast.LENGTH_LONG).show()
-                    return@Button
-                }
-                if (password.length < 6) {
-                    Toast.makeText(context, "ERROR: La contraseña debe tener al menos 6 caracteres.", Toast.LENGTH_LONG).show()
-                    return@Button
-                }
-                if (password != confirmPassword) {
-                    Toast.makeText(context, "ERROR: Las contraseñas no coinciden.", Toast.LENGTH_LONG).show()
-                    return@Button
-                }
-                if (!isValidRUT(rut.trim())) {
-                    Toast.makeText(context, "ERROR: RUT inválido. Debe ser sin puntos y con guion (ej: 12345678-K).", Toast.LENGTH_LONG).show()
-                    return@Button
-                }
-                if (!isOlderThan18(dob.trim())) {
-                    Toast.makeText(context, "ERROR: Debes ser mayor de 18 años para apostar.", Toast.LENGTH_LONG).show()
-                    return@Button
-                }
-
-                Toast.makeText(context, "Cuenta creada exitosamente. Ve a iniciar sesión por favor.", Toast.LENGTH_LONG).show()
-                onRegisterSuccess()
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-        ) {
-            Text("REGISTRAR", color = Color.White, fontWeight = FontWeight.Bold)
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "¿Ya tienes una cuenta? Inicia sesión aquí.",
-            color = Color.Black,
-            fontSize = 16.sp,
-            modifier = Modifier.clickable { onNavigateLogin() }
         )
     }
 }
@@ -401,6 +179,7 @@ fun HomeScreen(
     username: String,
     balance: Int,
     remoteData: List<UserData>?,
+    remoteDataError: String?,
     onNavigate: (Screen) -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -480,31 +259,50 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(20.dp))
 
         // --- API Obtener Datos ---
-        if (remoteData != null) {
-            Text(
-                text = "USUARIO RECIENTE Y RESULTADOS",
-                color = Color.Black,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 15.dp)
-            )
-            LazyColumn(modifier = Modifier.height(200.dp)) {
-                items(remoteData) { data ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFEEEEEE))
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            if (data.usuario != null) {
-                                Text("Usuario: ${data.usuario}", fontWeight = FontWeight.Bold)
-                                Text("Correo: ${data.correo}")
-                            } else {
-                                Text("Rapero: ${data.rapero}", fontWeight = FontWeight.Bold)
-                                Text("Monto Apostado: ${data.monto_apostado}")
-                                Text("Predicción: ${data.prediccion}")
-                                Text("Resultado: ${data.resultado}")
+        Text(
+            text = "USUARIO RECIENTE Y RESULTADOS",
+            color = Color.Black,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 15.dp)
+        )
+
+        when {
+            remoteDataError != null -> {
+                Text(
+                    text = "Error al cargar datos: $remoteDataError",
+                    color = Color.Red
+                )
+            }
+            remoteData == null -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Cargando datos de la API...")
+                }
+            }
+            remoteData.isEmpty() -> {
+                Text("No se encontraron resultados de la API.")
+            }
+            else -> {
+                LazyColumn(modifier = Modifier.height(200.dp)) {
+                    items(remoteData) { data ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFEEEEEE))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                if (data.usuario != null) {
+                                    Text("Usuario: ${data.usuario}", fontWeight = FontWeight.Bold)
+                                    Text("Correo: ${data.correo}")
+                                } else {
+                                    Text("Rapero: ${data.rapero}", fontWeight = FontWeight.Bold)
+                                    Text("Monto Apostado: ${data.monto_apostado}")
+                                    Text("Predicción: ${data.prediccion}")
+                                    Text("Resultado: ${data.resultado}")
+                                }
                             }
                         }
                     }
@@ -627,7 +425,11 @@ fun StoreScreen(
 
 // --- PANTALLA 5: RECARGA VARIABLE ---
 @Composable
-fun RechargeScreen(onRecharge: (Int) -> Unit, onBack: () -> Unit) {
+fun RechargeScreen(
+    isRecharging: Boolean,
+    onRecharge: (Int) -> Unit,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     var amountText by rememberSaveable { mutableStateOf("") }
     val amountInt = amountText.toIntOrNull() ?: 0
@@ -640,61 +442,86 @@ fun RechargeScreen(onRecharge: (Int) -> Unit, onBack: () -> Unit) {
         unfocusedLabelColor = Color.DarkGray,
     )
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-            .padding(32.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        Text("RECARGAR SALDO", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-        Spacer(modifier = Modifier.height(30.dp))
-
-        OutlinedTextField(
-            value = amountText,
-            onValueChange = { newValue ->
-                amountText = newValue.filter { it.isDigit() }
-            },
-            label = { Text("Cantidad a recargar ($)") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            colors = textFieldColors,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Button(
-            onClick = {
-                if (amountInt > 0) {
-                    onRecharge(amountInt)
-                } else {
-                    Toast.makeText(context, "Ingrese una cantidad válida.", Toast.LENGTH_SHORT).show()
-                }
-            },
-            enabled = amountInt > 0,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
+                .fillMaxSize()
+                .background(Color.White)
+                .padding(32.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Text("RECARGAR $ ${"%,d".format(amountInt)}", color = Color.White, fontWeight = FontWeight.Bold)
-        }
+            Image(
+                painter = painterResource(id = R.drawable.dinero),
+                contentDescription = "Recargar Saldo",
+                modifier = Modifier
+                    .size(120.dp)
+                    .padding(bottom = 24.dp)
+            )
+            Text("RECARGAR SALDO", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            Spacer(modifier = Modifier.height(30.dp))
 
-        Spacer(modifier = Modifier.height(20.dp))
-        Text(
-            text = "Volver",
-            color = Color.DarkGray,
-            modifier = Modifier.clickable { onBack() }
-        )
+            OutlinedTextField(
+                value = amountText,
+                onValueChange = { newValue ->
+                    if (!isRecharging) {
+                        amountText = newValue.filter { it.isDigit() }
+                    }
+                },
+                label = { Text("Cantidad a recargar ($)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                colors = textFieldColors,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isRecharging
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Button(
+                onClick = {
+                    if (amountInt > 0) {
+                        onRecharge(amountInt)
+                    } else {
+                        Toast.makeText(context, "Ingrese una cantidad válida.", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                enabled = amountInt > 0 && !isRecharging,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                if (isRecharging) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("RECARGAR $ ${"%,d".format(amountInt)}", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = "Volver",
+                color = Color.DarkGray,
+                modifier = Modifier.clickable {
+                    if (!isRecharging) {
+                        onBack()
+                    }
+                }
+            )
+        }
     }
 }
+
 
 // --- PANTALLA 6: BATALLAS ACTIVAS Y APUESTAS ---
 @Composable
 fun BattlesScreen(
     balance: Int,
     activeBattles: List<Battle>,
+    isPlacingBet: Boolean,
     onPlaceBet: (Battle, String, Int) -> Unit,
     onBack: () -> Unit
 ) {
@@ -728,8 +555,10 @@ fun BattlesScreen(
                 val isSelected = selectedBattle?.id == battle.id
                 Card(
                     onClick = {
-                        selectedBattle = battle
-                        selectedWinner = null // Reinicia la selección de ganador al elegir nueva batalla
+                        if (!isPlacingBet) {
+                            selectedBattle = battle
+                            selectedWinner = null // Reinicia la selección de ganador al elegir nueva batalla
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -754,17 +583,20 @@ fun BattlesScreen(
                             if (isSelected) {
                                 Spacer(modifier = Modifier.height(10.dp))
                                 // Botones para elegir ganador
-                                Row(horizontalArrangement = Arrangement.SpaceAround, modifier = Modifier.fillMaxWidth()) {
-                                    // Botón para Fighter A
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceAround,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
                                     Button(
-                                        onClick = { selectedWinner = battle.rapFighterA },
-                                        colors = ButtonDefaults.buttonColors(containerColor = if (selectedWinner == battle.rapFighterA) Color.Black else Color.DarkGray)
+                                        onClick = { if (!isPlacingBet) selectedWinner = battle.rapFighterA },
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (selectedWinner == battle.rapFighterA) Color.Black else Color.DarkGray),
+                                        enabled = !isPlacingBet
                                     ) { Text(battle.rapFighterA, color = Color.White) }
 
-                                    // Botón para Fighter B
                                     Button(
-                                        onClick = { selectedWinner = battle.rapFighterB },
-                                        colors = ButtonDefaults.buttonColors(containerColor = if (selectedWinner == battle.rapFighterB) Color.Black else Color.DarkGray)
+                                        onClick = { if (!isPlacingBet) selectedWinner = battle.rapFighterB },
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (selectedWinner == battle.rapFighterB) Color.Black else Color.DarkGray),
+                                        enabled = !isPlacingBet
                                     ) { Text(battle.rapFighterB, color = Color.White) }
                                 }
                             }
@@ -777,7 +609,7 @@ fun BattlesScreen(
         // --- Panel de Apuesta (Fijo en la parte inferior) ---
         if (selectedBattle != null) {
             Spacer(modifier = Modifier.height(10.dp))
-            Divider(color = Color.LightGray)
+            HorizontalDivider(color = Color.LightGray)
             Spacer(modifier = Modifier.height(10.dp))
 
             Text("Apostando en: ${selectedBattle!!.rapFighterA} vs ${selectedBattle!!.rapFighterB}", fontWeight = FontWeight.Bold)
@@ -791,7 +623,8 @@ fun BattlesScreen(
                 colors = textFieldColors,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 10.dp)
+                    .padding(vertical = 10.dp),
+                enabled = !isPlacingBet
             )
 
             Button(
@@ -810,16 +643,18 @@ fun BattlesScreen(
                     }
 
                     onPlaceBet(selectedBattle!!, selectedWinner!!, betAmount)
-                    selectedBattle = null
-                    selectedWinner = null
                 },
-                enabled = selectedWinner != null && betAmount > 0 && balance >= betAmount,
+                enabled = selectedWinner != null && betAmount > 0 && balance >= betAmount && !isPlacingBet,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
             ) {
-                Text("APOSTAR $ ${"%,d".format(betAmount)}", color = Color.White, fontWeight = FontWeight.Bold)
+                if (isPlacingBet) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("APOSTAR $ ${"%,d".format(betAmount)}", color = Color.White, fontWeight = FontWeight.Bold)
+                }
             }
         }
 
@@ -827,9 +662,7 @@ fun BattlesScreen(
         Text(
             text = "Volver",
             color = Color.DarkGray,
-            modifier = Modifier
-                .clickable { onBack() }
-                .align(Alignment.CenterHorizontally)
+            modifier = Modifier.clickable { onBack() }.align(Alignment.CenterHorizontally)
         )
     }
 }
@@ -837,8 +670,8 @@ fun BattlesScreen(
 // --- PANTALLA 7: HISTORIAL DE APUESTAS ---
 @Composable
 fun HistoryScreen(
-    history: List<Bet>,
-    formatTimestamp: (Long) -> String,
+    history: List<cl.samuel.barzarena.data.local.model.Bet>,
+    formatTimestamp: (Date) -> String,
     onBack: () -> Unit
 ) {
     Column(
@@ -855,11 +688,11 @@ fun HistoryScreen(
         } else {
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(history) { bet ->
-                    val color = when (bet.result) {
-                        BetResult.WIN -> Color(0xFF006400) // Verde Oscuro
-                        BetResult.LOSS -> Color(0xFFB22222) // Rojo Ladrillo
-                        BetResult.PENDING -> Color.Gray
-                    }
+                    val isWin = bet.result == BetResult.WIN.name
+                    val color = if (isWin) Color(0xFF006400) else Color.Red
+                    val title = if (isWin) "APUESTA GANADA" else "APUESTA PERDIDA"
+                    val winningsLabel = if (isWin) "Ganancia:" else "Pérdida:"
+                    val winningsValue = bet.winnings.absoluteValue
 
                     Card(
                         modifier = Modifier
@@ -870,7 +703,7 @@ fun HistoryScreen(
                     ) {
                         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             Image(
-                                painter = painterResource(id = R.drawable.dinero),
+                                painter = painterResource(id = if (isWin) R.drawable.dinero else R.drawable.fms_logo),
                                 contentDescription = "Imagen de apuesta",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
@@ -879,29 +712,18 @@ fun HistoryScreen(
                             )
                             Spacer(modifier = Modifier.width(16.dp))
                             Column {
-                                // Línea 1: Resultado
                                 Text(
-                                    text = when (bet.result) {
-                                        BetResult.WIN -> "¡GANADOR!"
-                                        BetResult.LOSS -> "PERDEDOR"
-                                        else -> "PENDIENTE"
-                                    },
+                                    text = title,
                                     color = color,
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = 18.sp
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
 
-                                // Línea 2: Batalla y Apuesta
-                                Text("Batalla: ${bet.battle}", color = Color.Black)
-                                Text("Apostaste: $ ${"%,d".format(bet.amount)} por ${bet.winnerSelected}", color = Color.DarkGray)
-
-                                // Línea 3: Ganancia/Pérdida
-                                val winText = if (bet.finalWinnings >= 0) "Ganancia: +$ ${"%,d".format(bet.finalWinnings)}" else "Pérdida: -$ ${"%,d".format(-bet.finalWinnings)}"
-                                Text(winText, color = color)
-
-                                // Línea 4: Fecha
-                                Text("Fecha: ${formatTimestamp(bet.timestamp)}", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                                Text("Batalla: ${bet.details}", color = Color.Black)
+                                Text("Apostaste: $ ${"%,d".format(bet.amount.toInt())}", color = Color.DarkGray)
+                                Text("$winningsLabel $ ${"%,d".format(winningsValue.toInt())}", color = color, fontWeight = FontWeight.SemiBold)
+                                Text("Fecha: ${formatTimestamp(bet.date)}", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                             }
                         }
                     }
@@ -925,6 +747,7 @@ fun HistoryScreen(
 fun CartScreen(
     cartItems: List<CartItem>,
     onCheckout: () -> Unit,
+    onRemoveFromCart: (CartItem) -> Unit, // Se añade la función para eliminar
     onBack: () -> Unit
 ) {
     val totalCost = cartItems.sumOf { it.item.price * it.quantity }
@@ -958,6 +781,10 @@ fun CartScreen(
                         Spacer(modifier = Modifier.width(16.dp))
                         Text(cartItem.item.name, modifier = Modifier.weight(1f), fontSize = 16.sp, color = Color.Black)
                         Text("$ ${"%,d".format(cartItem.item.price * cartItem.quantity)}", fontSize = 16.sp, color = Color.DarkGray)
+                        // Botón para eliminar el ítem
+                        IconButton(onClick = { onRemoveFromCart(cartItem) }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Eliminar ítem", tint = Color.Red)
+                        }
                     }
                 }
             }
@@ -1014,21 +841,8 @@ fun MenuButton(text: String, onClick: () -> Unit) {
     }
 }
 
-
-@Preview(showBackground = true)
-@Composable
-fun LoginScreenPreview() {
-    LoginScreen(onLoginSuccess = {}, onNavigateRegister = {})
-}
-
-@Preview(showBackground = true)
-@Composable
-fun RegisterScreenPreview() {
-    RegisterScreen(onRegisterSuccess = {}, onNavigateLogin = {})
-}
-
 @Preview(showBackground = true)
 @Composable
 fun HomeScreenPreview() {
-    HomeScreen(username = "Samuel", balance = 100000, remoteData = null, onNavigate = {}, onLogout = {})
+    HomeScreen(username = "Samuel", balance = 100000, remoteData = null, remoteDataError = null, onNavigate = {}, onLogout = {})
 }

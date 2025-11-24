@@ -1,0 +1,26 @@
+package cl.samuel.barzarena.data.local.dao
+
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
+import cl.samuel.barzarena.data.local.model.Item
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface ItemDao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertItem(item: Item)
+
+    @Update
+    suspend fun updateItem(item: Item)
+
+    @Delete
+    suspend fun deleteItem(item: Item)
+
+    @Query("SELECT * FROM items")
+    fun getAllItems(): Flow<List<Item>>
+}
