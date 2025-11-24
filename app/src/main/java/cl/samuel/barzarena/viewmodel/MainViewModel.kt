@@ -82,7 +82,7 @@ class MainViewModel @Inject constructor(
                     loginSuccess(user.userName, user.balance.toInt(), user.id)
                 }
             }
-            isSessionChecked = true // Marcamos la sesión como verificada
+            isSessionChecked = true // Marca la sesión como verificada
         }
     }
 
@@ -95,18 +95,18 @@ class MainViewModel @Inject constructor(
         balance = loggedInBalance
         userId = loggedInUserId
         remoteDataError = null
-        sessionManager.saveSession(loggedInUserId) // Guardamos la sesión
+        sessionManager.saveSession(loggedInUserId) // Guarda la sesión
         loadInitialData()
     }
 
     fun logout() {
-        sessionManager.clearSession() // Limpiamos la sesión
+        sessionManager.clearSession() // Limpia la sesión
         username = ""
         balance = 0
         userId = 0
         betHistory.clear()
         storeItems.clear()
-        // Ya no limpiamos el carrito al cerrar sesión
+        // Ya no limpia el carrito al cerrar sesión
         remoteData = null
         remoteDataError = null
     }
@@ -170,7 +170,7 @@ class MainViewModel @Inject constructor(
                 amount = amount.toDouble(),
                 details = "${battle.rapFighterA} vs ${battle.rapFighterB}",
                 date = Date(),
-                result = result.name, // Guardar "WIN" o "LOSS"
+                result = result.name, // Guardar "GANA" o "PIERDE"
                 winnings = finalWinnings
             )
             betRepository.placeBet(newBet)
@@ -209,7 +209,7 @@ class MainViewModel @Inject constructor(
             viewModelScope.launch {
                 userRepository.updateUserBalance(userId, newBalance.toDouble())
                 balance = newBalance
-                // Aquí también deberías actualizar el stock de los items en la BD
+                // Aquí también debería actualizar el stock de los items en la BD
             }
             clearCart()
             return true

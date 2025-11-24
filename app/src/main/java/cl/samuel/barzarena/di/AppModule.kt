@@ -51,7 +51,7 @@ object AppModule {
          .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
-                // Usamos un executor para insertar los datos iniciales en la base de datos.
+                // Use un executor para insertar los datos iniciales en la base de datos.
                 Executors.newSingleThreadExecutor().execute {
                     db.execSQL("INSERT INTO items (name, price, stock, imageName) VALUES ('Microfono de Oro', 15000.0, 10, 'microfonodeoro')")
                     db.execSQL("INSERT INTO items (name, price, stock, imageName) VALUES ('Pulsera de Lujo', 8000.0, 20, 'pulseradelujo')")

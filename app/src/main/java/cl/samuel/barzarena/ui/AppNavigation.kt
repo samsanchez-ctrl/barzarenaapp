@@ -93,13 +93,13 @@ fun BarzarenaApp() {
     val vm: MainViewModel = hiltViewModel()
     val context = LocalContext.current
 
-    // Primero, verificamos si la sesión ha sido comprobada.
+    // Primero, verifica si la sesión ha sido comprobada.
     if (!vm.isSessionChecked) {
         LoadingScreen()
-        return // Mostramos la pantalla de carga y no hacemos nada más hasta que la comprobación termine.
+        return // Muestra la pantalla de carga y no hace nada más hasta que la comprobación termine.
     }
 
-    // Una vez comprobada la sesión, decidimos la pantalla inicial y el resto de la navegación.
+    // Una vez comprobada la sesión, muestra la pantalla inicial y el resto de la navegación.
     var currentScreen by rememberSaveable {
         mutableStateOf(if (vm.isUserLoggedIn()) Screen.HOME else Screen.LOGIN)
     }
@@ -771,7 +771,7 @@ fun HistoryScreen(
 fun CartScreen(
     cartItems: List<CartItem>,
     onCheckout: () -> Unit,
-    onRemoveFromCart: (CartItem) -> Unit, // Se añade la función para eliminar
+    onRemoveFromCart: (CartItem) -> Unit, // Añadi una función para eliminar
     onBack: () -> Unit
 ) {
     val totalCost = cartItems.sumOf { it.item.price * it.quantity }

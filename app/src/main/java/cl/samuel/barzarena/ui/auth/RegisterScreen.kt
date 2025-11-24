@@ -47,7 +47,7 @@ fun RegisterScreen(
     var email by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
     var rut by rememberSaveable { mutableStateOf("") }
-    var birthDate by rememberSaveable { mutableStateOf("") } // expecting dd/MM/yyyy
+    var birthDate by rememberSaveable { mutableStateOf("") }
 
     val authState = authViewModel.authResult.collectAsState()
 

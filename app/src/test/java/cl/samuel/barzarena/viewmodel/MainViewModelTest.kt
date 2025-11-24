@@ -75,7 +75,7 @@ class MainViewModelTest {
         // Con StandardTestDispatcher, la corrutina se ha puesto en cola pero no ha corrido.
         assertEquals(1000, viewModel.balance)
 
-        // AHORA, le decimos a la prueba que ejecute todo lo que está pendiente.
+        // AHORA, le digo a la prueba que ejecute todo lo que está pendiente.
         advanceUntilIdle()
 
         // THEN (Entonces)
