@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cl.samuel.barzarena.data.local.SessionManager
 import cl.samuel.barzarena.data.local.model.Bet
 import cl.samuel.barzarena.data.local.model.Item
 import cl.samuel.barzarena.data.repository.BetRepository
@@ -21,6 +22,7 @@ import cl.samuel.barzarena.model.StoreItem
 import cl.samuel.barzarena.model.UserData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -31,7 +33,8 @@ import javax.inject.Inject
 class MainViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val betRepository: BetRepository,
-    private val itemRepository: ItemRepository
+    private val itemRepository: ItemRepository,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     var username by mutableStateOf("")
@@ -39,6 +42,9 @@ class MainViewModel @Inject constructor(
     var balance by mutableIntStateOf(0)
         private set
     var userId by mutableIntStateOf(0)
+        private set
+
+    var isSessionChecked by mutableStateOf(false)
         private set
 
     var isRecharging by mutableStateOf(false)
@@ -63,6 +69,23 @@ class MainViewModel @Inject constructor(
 
     val activeBattles: List<Battle> = ActiveBattles
 
+    init {
+        checkForActiveSession()
+    }
+
+    private fun checkForActiveSession() {
+        viewModelScope.launch {
+            val loggedInUserId = sessionManager.getUserId()
+            if (loggedInUserId != null) {
+                val user = userRepository.getUserById(loggedInUserId).first()
+                if (user != null) {
+                    loginSuccess(user.userName, user.balance.toInt(), user.id)
+                }
+            }
+            isSessionChecked = true // Marcamos la sesión como verificada
+        }
+    }
+
     fun isUserLoggedIn(): Boolean {
         return username.isNotEmpty()
     }
@@ -72,15 +95,18 @@ class MainViewModel @Inject constructor(
         balance = loggedInBalance
         userId = loggedInUserId
         remoteDataError = null
+        sessionManager.saveSession(loggedInUserId) // Guardamos la sesión
         loadInitialData()
     }
 
     fun logout() {
+        sessionManager.clearSession() // Limpiamos la sesión
         username = ""
         balance = 0
         userId = 0
         betHistory.clear()
         storeItems.clear()
+        // Ya no limpiamos el carrito al cerrar sesión
         remoteData = null
         remoteDataError = null
     }
@@ -183,7 +209,7 @@ class MainViewModel @Inject constructor(
             viewModelScope.launch {
                 userRepository.updateUserBalance(userId, newBalance.toDouble())
                 balance = newBalance
-
+                // Aquí también deberías actualizar el stock de los items en la BD
             }
             clearCart()
             return true

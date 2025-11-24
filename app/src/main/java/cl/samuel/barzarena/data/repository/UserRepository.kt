@@ -28,6 +28,10 @@ class UserRepository @Inject constructor(
         userDao.deleteUser(user)
     }
 
+    fun getUserById(id: Int): Flow<User?> {
+        return userDao.getUserById(id)
+    }
+
     fun getUserByUsername(username: String): Flow<User?> {
         return userDao.getUserByUsername(username)
     }

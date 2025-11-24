@@ -5,10 +5,10 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import cl.samuel.barzarena.data.local.AppDatabase
+import cl.samuel.barzarena.data.local.SessionManager
 import cl.samuel.barzarena.data.local.dao.BetDao
 import cl.samuel.barzarena.data.local.dao.ItemDao
 import cl.samuel.barzarena.data.local.dao.UserDao
-import cl.samuel.barzarena.data.local.model.Item
 import cl.samuel.barzarena.data.remote.ApiService
 import cl.samuel.barzarena.data.repository.BetRepository
 import cl.samuel.barzarena.data.repository.ItemRepository
@@ -24,18 +24,25 @@ import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import javax.inject.Provider
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
+    // --- GESTOR DE SESIÓN ---
+    @Provides
+    @Singleton
+    fun provideSessionManager(@ApplicationContext context: Context): SessionManager {
+        return SessionManager(context)
+    }
+
     // --- Base de Datos Local ---
     @Provides
     @Singleton
-    fun provideAppDatabase(@ApplicationContext context: Context, itemDaoProvider: javax.inject.Provider<ItemDao>): AppDatabase {
+    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
         return Room.databaseBuilder(
             context.applicationContext,
             AppDatabase::class.java,
@@ -44,11 +51,11 @@ object AppModule {
          .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
-                CoroutineScope(Dispatchers.IO).launch {
-                    val itemDao = itemDaoProvider.get()
-                    itemDao.insertItem(Item(name = "Microfono de Oro", price = 15000.0, stock = 10, imageName = "microfonodeoro"))
-                    itemDao.insertItem(Item(name = "Pulsera de Lujo", price = 8000.0, stock = 20, imageName = "pulseradelujo"))
-                    itemDao.insertItem(Item(name = "Cadena de Lujo", price = 12000.0, stock = 15, imageName = "cadenadelujo"))
+                // Usamos un executor para insertar los datos iniciales en la base de datos.
+                Executors.newSingleThreadExecutor().execute {
+                    db.execSQL("INSERT INTO items (name, price, stock, imageName) VALUES ('Microfono de Oro', 15000.0, 10, 'microfonodeoro')")
+                    db.execSQL("INSERT INTO items (name, price, stock, imageName) VALUES ('Pulsera de Lujo', 8000.0, 20, 'pulseradelujo')")
+                    db.execSQL("INSERT INTO items (name, price, stock, imageName) VALUES ('Cadena de Lujo', 12000.0, 15, 'cadenadelujo')")
                 }
             }
          })

@@ -70,20 +70,40 @@ import kotlin.math.absoluteValue
 // --- CONSTANTES Y ESTADO GLOBAL ---
 enum class Screen { LOGIN, REGISTER, HOME, STORE, RECHARGE, BATTLES, HISTORY, CART }
 
-// --- FUNCIÓN PRINCIPAL DE NAVEGACIÓN ---
+// --- PANTALLA DE CARGA INICIAL ---
+@Composable
+fun LoadingScreen() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = Color.Black)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Comprobando sesión...", fontSize = 18.sp, color = Color.Black)
+        }
+    }
+}
 
+// --- FUNCIÓN PRINCIPAL DE NAVEGACIÓN ---
 @Composable
 fun BarzarenaApp() {
-    // Inyección del ViewModel usando Hilt
     val vm: MainViewModel = hiltViewModel()
     val context = LocalContext.current
 
-    // Estado de la Sesión y Navegación
+    // Primero, verificamos si la sesión ha sido comprobada.
+    if (!vm.isSessionChecked) {
+        LoadingScreen()
+        return // Mostramos la pantalla de carga y no hacemos nada más hasta que la comprobación termine.
+    }
+
+    // Una vez comprobada la sesión, decidimos la pantalla inicial y el resto de la navegación.
     var currentScreen by rememberSaveable {
         mutableStateOf(if (vm.isUserLoggedIn()) Screen.HOME else Screen.LOGIN)
     }
 
-    // Dibujar la pantalla actual
     when (currentScreen) {
         Screen.LOGIN -> LoginScreen(
             onLoginSuccess = { user ->
@@ -104,14 +124,14 @@ fun BarzarenaApp() {
             onNavigate = { currentScreen = it },
             onLogout = {
                 vm.logout()
-                currentScreen = Screen.LOGIN // Asegura la redirección inmediata a LOGIN
+                currentScreen = Screen.LOGIN
             },
         )
         Screen.STORE -> StoreScreen(
             balance = vm.balance,
             items = vm.storeItems.map {
                 val imageResId = context.resources.getIdentifier(it.imageName, "drawable", context.packageName)
-                StoreItem(it.name, it.price.toInt(), if (imageResId != 0) imageResId else R.drawable.dinero) // Fallback
+                StoreItem(it.name, it.price.toInt(), if (imageResId != 0) imageResId else R.drawable.dinero)
             },
             onAddToCart = { item ->
                 vm.addToCart(item)
@@ -146,7 +166,7 @@ fun BarzarenaApp() {
                         "¡Perdiste! Suerte para la próxima."
                     }
                     Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-                    currentScreen = Screen.HOME // Regresa a Home después de la apuesta
+                    currentScreen = Screen.HOME
                 }
             },
             onBack = { currentScreen = Screen.HOME }
@@ -169,6 +189,10 @@ fun BarzarenaApp() {
             onRemoveFromCart = vm::removeFromCart,
             onBack = { currentScreen = Screen.STORE }
         )
+        null -> {
+            // Esto es necesario para que el `when` sea exhaustivo, aunque nunca debería llegar aquí.
+            LoadingScreen()
+        }
     }
 }
 
@@ -801,7 +825,6 @@ fun CartScreen(
             }
 
             Spacer(modifier = Modifier.height(20.dp))
-
             // Botón de finalizar compra
             Button(
                 onClick = onCheckout,

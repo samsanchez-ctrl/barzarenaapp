@@ -85,6 +85,11 @@ dependencies {
     kapt("androidx.room:room-compiler:${room_version}")
     implementation("androidx.room:room-ktx:${room_version}")
 
+    // Unit Testing
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("io.mockk:mockk:1.13.5")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+
 }
 
 
