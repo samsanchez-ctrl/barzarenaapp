@@ -11,7 +11,7 @@ import cl.samuel.barzarena.data.local.model.Bet
 import cl.samuel.barzarena.data.local.model.Item
 import cl.samuel.barzarena.data.local.model.User
 
-@Database(entities = [User::class, Bet::class, Item::class], version = 4, exportSchema = false)
+@Database(entities = [User::class, Bet::class, Item::class], version = 6, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
 

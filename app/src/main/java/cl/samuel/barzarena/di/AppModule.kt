@@ -9,6 +9,7 @@ import cl.samuel.barzarena.data.local.SessionManager
 import cl.samuel.barzarena.data.local.dao.BetDao
 import cl.samuel.barzarena.data.local.dao.ItemDao
 import cl.samuel.barzarena.data.local.dao.UserDao
+import cl.samuel.barzarena.data.local.model.Item
 import cl.samuel.barzarena.data.remote.ApiService
 import cl.samuel.barzarena.data.repository.BetRepository
 import cl.samuel.barzarena.data.repository.ItemRepository
@@ -24,8 +25,8 @@ import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import javax.inject.Provider
 import javax.inject.Singleton
 
 @Module
@@ -42,7 +43,10 @@ object AppModule {
     // --- Base de Datos Local ---
     @Provides
     @Singleton
-    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
+    fun provideAppDatabase(
+        @ApplicationContext context: Context,
+        itemDaoProvider: Provider<ItemDao>
+    ): AppDatabase {
         return Room.databaseBuilder(
             context.applicationContext,
             AppDatabase::class.java,
@@ -51,11 +55,11 @@ object AppModule {
          .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
-                // Use un executor para insertar los datos iniciales en la base de datos.
-                Executors.newSingleThreadExecutor().execute {
-                    db.execSQL("INSERT INTO items (name, price, stock, imageName) VALUES ('Microfono de Oro', 15000.0, 10, 'microfonodeoro')")
-                    db.execSQL("INSERT INTO items (name, price, stock, imageName) VALUES ('Pulsera de Lujo', 8000.0, 20, 'pulseradelujo')")
-                    db.execSQL("INSERT INTO items (name, price, stock, imageName) VALUES ('Cadena de Lujo', 12000.0, 15, 'cadenadelujo')")
+                // Uso el DAO para insertar los datos de forma segura
+                CoroutineScope(Dispatchers.IO).launch {
+                    itemDaoProvider.get().insertItem(Item(name = "Microfono de Oro", price = 15000.0, stock = 10, imageName = "microfonodeoro"))
+                    itemDaoProvider.get().insertItem(Item(name = "Pulsera de Lujo", price = 8000.0, stock = 20, imageName = "pulseradelujo"))
+                    itemDaoProvider.get().insertItem(Item(name = "Cadena de Lujo", price = 12000.0, stock = 15, imageName = "cadenadelujo"))
                 }
             }
          })

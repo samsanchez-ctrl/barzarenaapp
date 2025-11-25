@@ -118,12 +118,22 @@ class MainViewModel @Inject constructor(
                 betHistory.addAll(history)
             }
         }
+
         viewModelScope.launch {
+            // Lógica de seguridad: si la tienda está vacía, inserta los items.
+            if (itemRepository.getStoreItems().first().isEmpty()) {
+                itemRepository.insertItem(Item(name = "Microfono de Oro", price = 15000.0, stock = 10, imageName = "microfonodeoro"))
+                itemRepository.insertItem(Item(name = "Pulsera de Lujo", price = 8000.0, stock = 20, imageName = "pulseradelujo"))
+                itemRepository.insertItem(Item(name = "Cadena de Lujo", price = 12000.0, stock = 15, imageName = "cadenadelujo"))
+            }
+            
+            // Ahora, recolecta los items.
             itemRepository.getStoreItems().collect { items ->
                 storeItems.clear()
                 storeItems.addAll(items)
             }
         }
+        
         viewModelScope.launch {
             try {
                 remoteData = userRepository.getRemoteData()
