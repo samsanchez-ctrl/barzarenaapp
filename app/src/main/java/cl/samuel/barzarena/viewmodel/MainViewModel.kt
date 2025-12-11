@@ -195,12 +195,12 @@ class MainViewModel @Inject constructor(
         return sdf.format(date)
     }
 
-    fun addToCart(item: StoreItem) {
+    fun addToCart(item: StoreItem, quantity: Int) {
         val existingItem = cartItems.find { it.item.name == item.name }
         if (existingItem != null) {
-            existingItem.quantity++
+            existingItem.quantity += quantity
         } else {
-            cartItems.add(CartItem(item))
+            cartItems.add(CartItem(item, quantity))
         }
     }
 

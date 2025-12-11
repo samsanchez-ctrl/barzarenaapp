@@ -25,7 +25,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -133,9 +135,9 @@ fun BarzarenaApp() {
                 val imageResId = context.resources.getIdentifier(it.imageName, "drawable", context.packageName)
                 StoreItem(it.name, it.price.toInt(), if (imageResId != 0) imageResId else R.drawable.dinero)
             },
-            onAddToCart = { item ->
-                vm.addToCart(item)
-                Toast.makeText(context, "${item.name} agregado al carrito", Toast.LENGTH_SHORT).show()
+            onAddToCart = { item, quantity -> // Modified lambda signature
+                vm.addToCart(item, quantity) // Modified call
+                Toast.makeText(context, "${quantity}x ${item.name} agregado al carrito", Toast.LENGTH_SHORT).show()
             },
             onNavigateToCart = { currentScreen = Screen.CART },
             onBack = { currentScreen = Screen.HOME }
@@ -354,7 +356,7 @@ fun HomeScreen(
 fun StoreScreen(
     balance: Int,
     items: List<StoreItem>,
-    onAddToCart: (StoreItem) -> Unit,
+    onAddToCart: (StoreItem, Int) -> Unit, // Changed signature
     onNavigateToCart: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -387,6 +389,8 @@ fun StoreScreen(
         // Lista de ítems
         LazyColumn(modifier = Modifier.weight(1f)) {
             items(items) { item ->
+                var quantity by rememberSaveable(key = item.name) { mutableStateOf(1) } // State for each item's quantity
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -410,11 +414,33 @@ fun StoreScreen(
                         Text(item.name, color = Color.Black, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
                         Text("$ ${"%,d".format(item.price)}", color = Color.DarkGray)
                     }
-                    Button(
-                        onClick = { onAddToCart(item) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black)
+
+                    // Quantity selector and Add button
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text("Agregar", color = Color.White)
+                        IconButton(
+                            onClick = { if (quantity > 1) quantity-- },
+                            enabled = quantity > 1
+                        ) {
+                            Icon(Icons.Default.Remove, contentDescription = "Decrease quantity")
+                        }
+                        Text("$quantity", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        IconButton(
+                            onClick = { quantity++ }
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Increase quantity")
+                        }
+                        Button(
+                            onClick = {
+                                onAddToCart(item, quantity)
+                                quantity = 1 // Reset quantity after adding to cart
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Black)
+                        ) {
+                            Text("Agregar", color = Color.White)
+                        }
                     }
                 }
             }
